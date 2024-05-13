@@ -35,7 +35,7 @@ Communication – was the app well presented, do I have a sense of what it’s d
 
 - **Project Title**: Child Maltreatment in the US
   
-- **Dataset**: Data for this capstone project is from the Annie E. Casey Foundation's [KIDS Count Data Center] (https://datacenter.aecf.org/data?location=USA#USA/1/0/char/0).
+- **Dataset**: Data for this capstone project is from the Annie E. Casey Foundation's [KIDS Count Data Center](https://datacenter.aecf.org/data?location=USA#USA/1/0/char/0).
 
 - **Rationale**: Reporting requirements for child maltreatment (emotional abuse, physical abuse, sexual abuse, and neglect) vary by state. This dataset reports child maltreatment cases that can be compared across states, unlike other publicly available databases. Additionally, cases are confirmed by Child Protective Services (CPS). 
 
