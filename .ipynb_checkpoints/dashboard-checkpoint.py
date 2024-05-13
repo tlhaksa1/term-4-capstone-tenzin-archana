@@ -1,3 +1,6 @@
+### DS4PH Term 4 Capstone Project
+# Group Members: Tenzin Lhaksampa and Archana Balan
+
 # Import packages
 import streamlit as st
 import pandas as pd
@@ -5,11 +8,13 @@ import numpy as np
 import folium
 import plotly as py 
 from importlib import import_module
-import plotly.graph_objects as go
 
 # read in data
-dat = pd.read_excel("maltreatment_data.xlsx")
-dat.tail(10)
+dat = pd.read_excel("matreatment_data.xlsx")
+dat.head()
+# check columns 
+#print(dat.columns)
+#print("\n", dat.shape)
 
 # only retain numbers (not percentages)
 dat = dat[dat['DataFormat'] == 'Number']
@@ -17,117 +22,234 @@ dat = dat[dat['DataFormat'] == 'Number']
 # convert cases reported to a numeric value
 dat['Data'] = pd.to_numeric(dat['Data'], errors='coerce')
 
+# rename and retain only relevant columns 
+dat.rename({'LocationCode':'State', 
+            'Category':'Type', 
+            'TimeFrame':'Year', 
+            'Data':'Case'}, 
+           axis=1, 
+           inplace=True)
+
 # drop NA values
 dat = dat.dropna()
 
-# drop missing data 
-dat = dat[dat['Category'] != 'Other/missing maltreatment type']
-
-# Merge "Neglect" and "Medical Neglect" into only "Neglect" 
-dat['Category'] = dat['Category'].replace('Medical neglect', 'Neglect')
-dat = dat.groupby(['LocationType', 'Location', 'Category', 'TimeFrame', 'DataFormat']).agg({'Data': 'sum'}).reset_index()
-
-# check dataset
-dat.head(10)
-
-# confirm data merge 
-us_dat = dat[(dat['Location'] == 'United States') & (dat['Category'] == 'Neglect')]
-us_dat.head(10)
-
-    
-# Display column names
+# print data frame shape and column names
 print(dat.columns)
+print("\n", dat.shape)
+
+# drop missing data 
+dat = dat[dat['Type'] != 'Other/missing maltreatment type']
+#dat.shape
+
+# drop US data
+dat = dat[dat['State'] != 'US']
+#dat.shape
+
+# Capitalize words in the 'Type' column using str.title() method
+dat['Type'] = dat['Type'].str.title()
+dat.head() # check
+
+# merge "Neglect" and "Medical Neglect" into only "Neglect" 
+dat['Type'] = dat['Type'].replace('Medical neglect', 'Neglect')
+dat = dat.groupby(['State', 'Type', 'Year']).agg({'Case': 'sum'}).reset_index()
+
+#print(dat.shape) # check shape
+print("\n", dat.head()) # check dataset
+
+# confirm data merge using MD as an example
+md_dat = dat[(dat['State'] == 'MD') & (dat['Type'] == 'Neglect')]
+md_dat.head(10)
 
 
-# Dashboard app 
 
-def main():
-    st.title("Child Maltreatment in the United States (2015-2022)")
+## Total Maltreatment ##
+# Calculate the total case count of child maltreatment across types
+# Group by "State" and "Type", and sum the "Case" column
+sum_dat = dat.groupby(['State', 'Year'])['Case'].sum().reset_index()
 
-    # Get user inputs for unit selection
-    rb = st.radio("Select maltreatment type:", ("Emotional Abuse", "Physical Abuse", "Sexual Abuse", "Neglect", "Medical Neglect"), index=0)
-    cb = st.checkbox ("Select Year:", ("2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022"))
-    
-    # Add map
-    # Dashboard app 
+# generate the max number of cases 
+max_value = dat['Case'].max()
 
-def main():
-    st.title("Child Maltreatment by Type")
+# Display the resulting DataFrame
+print(sum_dat.head())
 
-    # Get user input for year and maltreatment type
-    year = st.radio ("Select year:", ("2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022"), index=0)
-    type = st.radio("Select maltreatment type:", ("Emotional Abuse", "Physical Abuse", "Sexual Abuse", "Neglect", "Medical Neglect"), index=0)
+print("\nHighest Total Maltreatment Case Count in the US:", max_value)
 
-    
+#print("\n", sum_dat.shape)
 
-# Create the choropleth map
 
-# Step 1: Get unique categories and years
-unique_categories = dat['Category'].unique()
-unique_years = dat['TimeFrame'].unique()
 
-# Step 2: Create a subplot for each combination of category and year
-fig = go.Figure()
+## Maltreatment Types ##
+# data frames per maltreatment type 
+emotional = dat[dat['Type'] == 'Emotional Abuse'][['State', 'Year', 'Case']]
+physical = dat[dat['Type'] == 'Physical Abuse'][['State', 'Year', 'Case']]
+sexual = dat[dat['Type'] == 'Sexual Abuse'][['State', 'Year', 'Case']]
+neglect = dat[dat['Type'] == 'Neglect'][['State', 'Year', 'Case']]
 
-for category in unique_categories:
-    for year in unique_years:
-        filtered_dat = dat[(dat['Category'] == category) & (dat['TimeFrame'] == year)]
-        
-        fig.add_trace(go.Choropleth(
-            locations=filtered_dat['Location'],  # State names
-            z=filtered_dat['Data'],  # Values to be mapped
-            locationmode='USA-states',  # Set of locations match entries in `locations`
-            colorscale='Viridis',
-            colorbar_title='Count',
-            text=filtered_dat['Category'],  # Additional text to display in hover
-            name=f'{category} ({year})',  # Add category and year to subplot name
-            visible=False  # Initially hide the subplot
-        ))
+print("Emotional Abuse\n", emotional.head(3))
+print("\nPhysical Abuse\n", physical.head(3)) 
+print("\nSexual Abuse\n", sexual.head(3))
+print("\nNeglect\n", neglect.head(3))
 
-# Update layout
+
+
+### Streamlit App ###
+import plotly.express as px
+
+# Create choropleth map for total maltreatment over time 
+fig = px.choropleth(sum_dat,
+                    locations='State',  # Column containing state names
+                    locationmode='USA-states',  # Set of locations match entries in the `State` column
+                    color='Case',  # Column containing the values to be mapped
+                    animation_frame='Year',  # Column containing the year
+                    color_continuous_scale="Viridis_r",  # Color scale
+                    labels={'Case': 'Case Count'},  # Label for color axis
+                    scope='usa',  # Set to plot only USA states
+                    title='Total Child Maltreatment Cases in the US, 2015-2022',  # Title of the plot
+                   )
+
+# Update layout 
 fig.update_layout(
-    title_text='US Map of Child Maltreatment by Category (2015-2022)',
-    geo=dict(
-        scope='usa',  # Set to plot only USA states
-    ),
-    updatemenus=[
-        {
-            'buttons': [
-                {
-                    'args': [None, {'frame': {'duration': 500, 'redraw': True}, 'fromcurrent': True}],
-                    'label': 'Play',
-                    'method': 'animate'
-                },
-                {
-                    'args': [[None], {'frame': {'duration': 0, 'redraw': True}, 'mode': 'immediate', 'transition': {'duration': 0}}],
-                    'label': 'Pause',
-                    'method': 'animate'
-                }
-            ],
-            'direction': 'left',
-            'pad': {'r': 10, 't': 87},
-            'showactive': False,
-            'type': 'buttons',
-            'x': 0.1,
-            'xanchor': 'right',
-            'y': 0,
-            'yanchor': 'top'
-        }
-    ]
+    coloraxis_colorbar=dict(title="Cases Count"),  # Title for color bar
+    coloraxis_colorbar_ticks="outside",  # Display color bar ticks outside the color bar
+    coloraxis=dict(cmin=0, cmax=80000),  # Minimum value for the color axis
+    height=600,  # Set the height of the plot
+    width=800,  # Set the width of the plot
 )
-
-# Create frames for animation
-frames = [dict(data=[go.Choropleth(visible=True if i == j * len(unique_years) else False) for i in range(len(unique_categories) * len(unique_years))]) for j in range(len(unique_years))]
-
-# Add frames to animation
-fig.frames = frames
 
 # Show the map
 fig.show()
 
 
-if __name__ == "__main__":
-    main()
+# Prepare data by type of child maltreatment
 
-if __name__ == "__main__":
-    main()      
+# Define a list of abuse types
+abuse_types = ['Emotional abuse', 'Physical abuse', 'Sexual abuse', 'Neglect']
+
+# Create an empty dictionary to store DataFrames for each abuse type
+abuse_data = {}
+
+# Loop through each abuse type
+for abuse_type in abuse_types:
+    # Filter the DataFrame for the current abuse type and select desired columns
+    abuse_data[abuse_type.lower().replace(' ', '_')] = dat[dat['Type'] == abuse_type][['State', 'Year', 'Case']]
+
+
+# Create a choropleth map for each abuse type
+for abuse_type in abuse_types:
+    # Filter the DataFrame for the current abuse type and select desired columns
+    abuse_data = dat[dat['Type'] == abuse_type][['State', 'Year', 'Case']]
+    
+    # Create a choropleth map for the current abuse type
+    fig = px.choropleth(abuse_data,
+                        locations='State',  # Column containing state names
+                        locationmode='USA-states',  # Set of locations match entries in `locations`
+                        color='Case',  # Column containing the values to be mapped
+                        animation_frame='Year',  # Column containing the time frame (year)
+                        color_continuous_scale="Viridis_r",  # Color scale
+                        labels={'Case': 'Case Count'},  # Label for color axis
+                        scope='usa',  # Set to plot only USA states
+                        title=f'Child {abuse_type} Cases in the US, 2015-2022'  # Title of the plot
+                        )
+    # Update layout 
+    fig.update_layout(
+        coloraxis_colorbar=dict(title="Case Count"),  # Title for color bar
+        coloraxis_colorbar_ticks="outside",  # Display color bar ticks outside the color bar
+        coloraxis=dict(cmin=0, cmax=80000),  # Minimum value for the color axis
+        height=600,  # Set the height of the plot
+        width=800,  # Set the width of the plot
+    )
+    
+    # Show the map
+    fig.show()
+
+
+## Streamlit app
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# Read data
+dat = pd.read_excel("matreatment_data.xlsx")
+
+# Clean the data
+dat = dat[dat['DataFormat'] == 'Number']
+dat['Data'] = pd.to_numeric(dat['Data'], errors='coerce')
+dat.rename(columns={'LocationCode': 'State', 'Category': 'Type', 'TimeFrame': 'Year', 'Data': 'Case'}, inplace=True)
+dat = dat.dropna()
+dat['Type'] = dat['Type'].str.title()
+dat['Type'] = dat['Type'].replace('Medical Neglect', 'Neglect')
+dat = dat.groupby(['State', 'Type', 'Year']).agg({'Case': 'sum'}).reset_index()
+
+# Define abuse types
+abuse_types = ['Emotional Abuse', 'Physical Abuse', 'Sexual Abuse', 'Neglect']
+
+# Calculate total maltreatment cases over time
+sum_dat = dat.groupby(['State', 'Year'])['Case'].sum().reset_index()
+
+# Streamlit app
+st.write('''
+# Child Maltreatment Cases in the US, 2015-2022
+     
+##### Cases Confirmed by Child Protective Services
+
+### By Tenzin Lhaksampa and Archana Balan
+
+### **Choose Maltreatment Type**
+
+(Hover over states for more details)
+
+''')
+
+
+# Radio button to select maltreatment type
+rb_total_or_type = st.radio("", ['Total Maltreatment'] + abuse_types)
+
+
+if rb_total_or_type == 'Total Maltreatment':
+    # Show total maltreatment cases over time
+    fig_total = px.choropleth(sum_dat,
+                              locations='State',
+                              locationmode='USA-states',
+                              color='Case',
+                              animation_frame='Year',
+                              color_continuous_scale='Viridis_r',
+                              labels={'Case': 'Case Count'},
+                              scope='usa',
+                              )
+    fig_total.update_layout(
+        coloraxis_colorbar=dict(title="Cases Count"),
+        coloraxis_colorbar_ticks="outside",
+        coloraxis=dict(cmin=0, cmax=80000),
+        height=600,
+        width=800,
+    )
+    st.plotly_chart(fig_total)
+
+else:
+    # Show maltreatment cases by type over time
+    st.write(f"### {rb_total_or_type} Cases Over Time")
+    fig_type = px.choropleth(dat[dat['Type'] == rb_total_or_type],
+                             locations='State',
+                             locationmode='USA-states',
+                             color='Case',
+                             animation_frame='Year',
+                             color_continuous_scale='Viridis_r',
+                             labels={'Case': 'Case Count'},
+                             scope='usa',
+                             title=f'Child {rb_total_or_type} Cases in the US, 2015-2022'
+                             )
+    fig_type.update_layout(
+        coloraxis_colorbar=dict(title="Cases Count"),
+        coloraxis_colorbar_ticks="outside",
+        coloraxis=dict(cmin=0, cmax=80000),
+        height=600,
+        width=800,
+    )
+    st.plotly_chart(fig_type)
+
+st.write('''
+**Data Source**: <a href="https://datacenter.aecf.org/data?location=USA#USA/1/0/char/0" target="_blank">The Annie E. Casey Foundation (AECF®) | KIDS COUNT Data Center</a>
+''', unsafe_allow_html=True)
+
+st.write('**Footnote**. Data for states that did not report any data or reported a low number of case may not display any information in the map.')  
